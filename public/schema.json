@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Theological Document Collection",
+  "description": "Standardized schema for historical confessions, creeds, and catechisms.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "Unique identifier for the document, e.g., 'wcf', 'lbcf'."
+      },
+      "title": {
+        "type": "string",
+        "description": "The title of the document, e.g., 'Westminster Confession of Faith'."
+      },
+      "year": {
+        "type": ["integer", "string"],
+        "description": "The year the document was published or drafted."
+      },
+      "content": {
+        "type": "string",
+        "description": "The modernized or standard translated text of the document."
+      },
+      "content_original": {
+        "type": "string",
+        "description": "The text in its original language, if applicable."
+      },
+      "language_original": {
+        "enum": ["latin", "greek", "german", "dutch", "english", "french"],
+        "description": "The original language."
+      },
+      "proofs": {
+        "type": "array",
+        "description": "List of scriptural proofs cited in the document.",
+        "items": {
+          "type": "object",
+          "properties": {
+             "verseId": {
+                "type": "string",
+                "description": "Standardized verse identifier (e.g., 'Gen 1:1')."
+             },
+             "display": {
+                "type": "string",
+                "description": "How the verse reference was displayed in the original text."
+             }
+          },
+          "required": ["verseId", "display"]
+        }
+      },
+      "connections": {
+        "type": "array",
+        "items": {
+           "type": "string"
+        },
+        "description": "Array of connected document IDs forming cross-references."
+      },
+      "history_link": {
+        "type": ["string", "null"],
+        "description": "ID of the older document this derived from, establishing the lineage."
+      }
+    },
+    "required": ["id", "title", "content", "year", "proofs", "connections"]
+  }
+}

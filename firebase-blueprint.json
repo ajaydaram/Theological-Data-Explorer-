@@ -1,0 +1,59 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with basic information",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "createdAt": { "type": "integer" },
+        "updatedAt": { "type": "integer" }
+      },
+      "required": ["email", "createdAt", "updatedAt"]
+    },
+    "Highlight": {
+      "title": "Highlight",
+      "description": "A customized highlight or margin note on a text snippet",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "docId": { "type": "string" },
+        "text": { "type": "string" },
+        "color": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "integer" },
+        "updatedAt": { "type": "integer" }
+      },
+      "required": ["userId", "docId", "text", "color", "createdAt", "updatedAt"]
+    },
+    "Workspace": {
+       "title": "Workspace",
+       "description": "Custom saved Parallel View configurations",
+       "type": "object",
+       "properties": {
+          "userId": { "type": "string" },
+          "name": { "type": "string" },
+          "activeId": { "type": "string" },
+          "parallelId": { "type": "string" },
+          "createdAt": { "type": "integer" },
+          "updatedAt": { "type": "integer" }
+       },
+       "required": ["userId", "name", "activeId", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profiles"
+    },
+    "/highlights/{highlightId}": {
+      "schema": { "$ref": "#/entities/Highlight" },
+      "description": "Stores user highlights and notes"
+    },
+    "/workspaces/{workspaceId}": {
+      "schema": { "$ref": "#/entities/Workspace" },
+      "description": "Stores user saved workspace configurations"
+    }
+  }
+}
