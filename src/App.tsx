@@ -15,10 +15,6 @@ import { ContributeModal } from './components/ContributeModal';
 import { DocumentDiff } from './components/DocumentDiff';
 import { TimelineMap } from './components/TimelineMap';
 
-import { auth, db, loginWithGoogle, logout } from './lib/firebase';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
-
 type ViewMode = 'reader' | 'map' | 'timeline';
 
 export default function App() {
@@ -39,7 +35,6 @@ export default function App() {
   const [showAIAnalysis, setShowAIAnalysis] = useState<boolean>(false);
   const [showContribute, setShowContribute] = useState<boolean>(false);
 
-  const [user, setUser] = useState<User | null>(null);
   const [workspaces, setWorkspaces] = useState<any[]>([]);
   const [highlights, setHighlights] = useState<any[]>([]);
   const [showSaveWorkspace, setShowSaveWorkspace] = useState(false);
@@ -59,44 +54,42 @@ export default function App() {
   }, []);
 
   React.useEffect(() => {
-    return onAuthStateChanged(auth, u => setUser(u));
+    const localWorkspaces = localStorage.getItem('theos_workspaces');
+    if (localWorkspaces) {
+      try { setWorkspaces(JSON.parse(localWorkspaces)); } catch (e) {}
+    }
   }, []);
 
   React.useEffect(() => {
-    if (!user) { setWorkspaces([]); setHighlights([]); return; }
+    const handleStorageChange = () => {
+      const localHighlights = localStorage.getItem('theos_highlights');
+      if (localHighlights) {
+        try { setHighlights(JSON.parse(localHighlights)); } catch (e) {}
+      }
+    };
     
-    const wq = query(collection(db, 'workspaces'), where('userId', '==', user.uid));
-    const unsubW = onSnapshot(wq, snap => {
-       const w = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-       setWorkspaces(w);
-    });
+    // Initial load
+    handleStorageChange();
+    
+    // Listen for cross-tab or programmatic updates
+    window.addEventListener('highlights_updated', handleStorageChange);
+    return () => window.removeEventListener('highlights_updated', handleStorageChange);
+  }, []);
 
-    const hq = query(collection(db, 'highlights'), where('userId', '==', user.uid));
-    const unsubH = onSnapshot(hq, snap => {
-       const h = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-       setHighlights(h);
-    });
-
-    return () => { unsubW(); unsubH(); };
-  }, [user]);
-
-  const handleSaveWorkspace = async () => {
-    if (!user || !workspaceName) return;
-    try {
-      await addDoc(collection(db, 'workspaces'), {
-        userId: user.uid,
-        name: workspaceName,
-        activeId: activeId,
-        parallelId: parallelId || null,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      });
-      setShowSaveWorkspace(false);
-      setWorkspaceName('');
-    } catch(e) {
-      console.error(e);
-      alert("Failed to save workspace.");
-    }
+  const handleSaveWorkspace = () => {
+    if (!workspaceName) return;
+    const newWs = {
+      id: Date.now().toString(),
+      name: workspaceName,
+      activeId,
+      parallelId: parallelId || null,
+      createdAt: Date.now()
+    };
+    const updated = [...workspaces, newWs];
+    setWorkspaces(updated);
+    localStorage.setItem('theos_workspaces', JSON.stringify(updated));
+    setShowSaveWorkspace(false);
+    setWorkspaceName('');
   };
 
   const handleLoadWorkspace = (ws: any) => {
@@ -104,13 +97,11 @@ export default function App() {
     setParallelId(ws.parallelId || null);
   };
 
-  const handleDeleteWorkspace = async (id: string, e: React.MouseEvent) => {
+  const handleDeleteWorkspace = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    try {
-      await deleteDoc(doc(db, 'workspaces', id));
-    } catch (e) {
-      console.error(e);
-    }
+    const updated = workspaces.filter(w => w.id !== id);
+    setWorkspaces(updated);
+    localStorage.setItem('theos_workspaces', JSON.stringify(updated));
   };
 
   const theme = THEMES[themeMode];
@@ -626,57 +617,40 @@ export default function App() {
             )}
             
             <div className="flex items-center gap-4 relative">
-              {user ? (
-                <>
-                  <div className="flex flex-col items-end group relative">
-                    <button 
-                       className="flex items-center gap-2 font-mono text-[10px] uppercase font-bold text-[#A52A2A] hover:text-[#8A2525]"
-                    >
-                      <FolderOpen className="w-4 h-4" /> Workspaces
-                    </button>
-                    {/* Workspaces Dropdown */}
-                    <div className="absolute top-full right-0 mt-2 bg-white border border-[#D1CEC7] shadow-xl w-64 hidden group-hover:flex flex-col z-50">
-                      <div className="p-3 border-b border-[#D1CEC7] bg-[#F9F7F2]">
-                        <div className="text-[9px] uppercase tracking-widest text-[#7A756D] font-bold">Saved Views</div>
-                      </div>
-                      <div className="max-h-60 overflow-y-auto p-2">
-                        {workspaces.map(ws => (
-                          <div key={ws.id} className="flex items-center justify-between p-2 hover:bg-[#EFECE6] text-left group/item cursor-pointer" onClick={() => handleLoadWorkspace(ws)}>
-                            <span className="font-serif text-sm font-bold text-[#1A1A1A]">{ws.name}</span>
-                            <button onClick={(e) => handleDeleteWorkspace(ws.id, e)} className="text-[#A52A2A] opacity-0 group-hover/item:opacity-100 font-mono text-[9px] uppercase">DEL</button>
-                          </div>
-                        ))}
-                        {workspaces.length === 0 && <div className="p-3 text-center font-mono text-[10px] text-[#7A756D]">NO WORKSPACES</div>}
-                      </div>
-                      <div className="p-2 border-t border-[#D1CEC7] bg-[#F9F7F2]">
-                         {showSaveWorkspace ? (
-                            <div className="flex gap-2">
-                               <input type="text" value={workspaceName} onChange={e => setWorkspaceName(e.target.value)} placeholder="Workspace Name..." className="flex-1 text-[10px] font-mono p-1 border border-[#D1CEC7] focus:outline-none focus:border-[#A52A2A]" />
-                               <button onClick={handleSaveWorkspace} className="bg-[#A52A2A] text-white px-2 font-mono text-[9px] font-bold">SAVE</button>
-                            </div>
-                         ) : (
-                            <button onClick={(e) => { e.stopPropagation(); setShowSaveWorkspace(true); }} className="w-full flex justify-center items-center gap-2 text-[10px] font-mono uppercase bg-[#1A1A1A] text-white p-2 font-bold hover:bg-[#333]">
-                              <Save className="w-3 h-3" /> Save Current View
-                            </button>
-                         )}
-                      </div>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={logout}
-                    className="font-mono text-[10px] uppercase p-1 px-3 border border-[#D1CEC7] text-[#000000] hover:bg-[#EFECE6] transition-colors flex items-center gap-2"
-                  >
-                    <LogOut className="w-3 h-3" />
-                  </button>
-                </>
-              ) : (
+              <div className="flex flex-col items-end group relative border-l border-[#D1CEC7] pl-4">
                 <button 
-                  onClick={loginWithGoogle}
-                  className="font-mono text-[10px] font-bold uppercase tracking-widest text-white bg-[#A52A2A] hover:bg-[#8A2525] p-2 px-4 transition-colors flex items-center gap-2"
+                   className="flex items-center gap-2 font-mono text-[10px] uppercase font-bold text-[#A52A2A] hover:text-[#8A2525]"
                 >
-                  <LogIn className="w-3 h-3" /> Sync Identity
+                  <FolderOpen className="w-4 h-4" /> Workspaces
                 </button>
-              )}
+                {/* Workspaces Dropdown */}
+                <div className="absolute top-full right-0 mt-2 bg-white border border-[#D1CEC7] shadow-xl w-64 hidden group-hover:flex flex-col z-50">
+                  <div className="p-3 border-b border-[#D1CEC7] bg-[#F9F7F2]">
+                    <div className="text-[9px] uppercase tracking-widest text-[#7A756D] font-bold">Saved Views</div>
+                  </div>
+                  <div className="max-h-60 overflow-y-auto p-2">
+                    {workspaces.map(ws => (
+                      <div key={ws.id} className="flex items-center justify-between p-2 hover:bg-[#EFECE6] text-left group/item cursor-pointer" onClick={() => handleLoadWorkspace(ws)}>
+                        <span className="font-serif text-sm font-bold text-[#1A1A1A]">{ws.name}</span>
+                        <button onClick={(e) => handleDeleteWorkspace(ws.id, e)} className="text-[#A52A2A] opacity-0 group-hover/item:opacity-100 font-mono text-[9px] uppercase">DEL</button>
+                      </div>
+                    ))}
+                    {workspaces.length === 0 && <div className="p-3 text-center font-mono text-[10px] text-[#7A756D]">NO WORKSPACES</div>}
+                  </div>
+                  <div className="p-2 border-t border-[#D1CEC7] bg-[#F9F7F2]">
+                     {showSaveWorkspace ? (
+                        <div className="flex gap-2">
+                           <input type="text" value={workspaceName} onChange={e => setWorkspaceName(e.target.value)} placeholder="Workspace Name..." className="flex-1 text-[10px] font-mono p-1 border border-[#D1CEC7] focus:outline-none focus:border-[#A52A2A]" />
+                           <button onClick={handleSaveWorkspace} className="bg-[#A52A2A] text-white px-2 font-mono text-[9px] font-bold">SAVE</button>
+                        </div>
+                     ) : (
+                        <button onClick={(e) => { e.stopPropagation(); setShowSaveWorkspace(true); }} className="w-full flex justify-center items-center gap-2 text-[10px] font-mono uppercase bg-[#1A1A1A] text-white p-2 font-bold hover:bg-[#333]">
+                          <Save className="w-3 h-3" /> Save Current View
+                        </button>
+                     )}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </header>

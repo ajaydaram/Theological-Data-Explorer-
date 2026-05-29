@@ -1,7 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Sparkles, X, Loader2, Highlighter } from 'lucide-react';
-import { auth, db } from '../lib/firebase';
-import { collection, addDoc } from 'firebase/firestore';
 
 export function AIContextPopup({ documentTitle, documentId, contentRef }: { documentTitle: string, documentId: string, contentRef: React.RefObject<HTMLDivElement> }) {
   const [selection, setSelection] = useState<{ text: string, x: number, y: number, context: string } | null>(null);
@@ -80,24 +78,24 @@ export function AIContextPopup({ documentTitle, documentId, contentRef }: { docu
     }
   };
 
-  const handleSaveHighlight = async () => {
-    const user = auth.currentUser;
-    if (!user || !selection) {
-       setError("Must be signed in to highlight.");
-       return;
-    }
-    
+  const handleSaveHighlight = () => {
+    if (!selection) return;
     setSavingNote(true);
     try {
-       await addDoc(collection(db, 'highlights'), {
-          userId: user.uid,
+       const newHighlight = {
+          id: Date.now().toString(),
           docId: documentId,
           text: selection.text,
           color: selectedColor,
           notes: noteText,
           createdAt: Date.now(),
           updatedAt: Date.now(),
-       });
+       };
+       const localHighlights = localStorage.getItem('theos_highlights');
+       const parsed = localHighlights ? JSON.parse(localHighlights) : [];
+       const updated = [...parsed, newHighlight];
+       localStorage.setItem('theos_highlights', JSON.stringify(updated));
+       window.dispatchEvent(new Event('highlights_updated'));
        handleClose();
     } catch (e: any) {
        console.error(e);
